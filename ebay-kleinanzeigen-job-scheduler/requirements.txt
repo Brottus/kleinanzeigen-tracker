@@ -1,0 +1,21 @@
+# Service 2: Job Scheduler - Python Dependencies
+
+# Web Framework
+Flask>=3.0
+Flask-CORS>=4.0
+
+# API Documentation
+flask-swagger-ui>=5.0
+
+# Job Scheduling
+APScheduler>=3.10
+
+# HTTP Requests
+requests>=2.31
+
+# Security
+PyJWT>=2.8
+cryptography>=41.0
+
+# WSGI Server for Production
+gunicorn>=21.2
