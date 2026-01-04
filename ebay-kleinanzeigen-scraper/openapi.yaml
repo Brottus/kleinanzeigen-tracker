@@ -1,0 +1,457 @@
+openapi: 3.0.0
+info:
+  title: Kleinanzeigen Scraper API
+  description: Production-ready API for scraping kleinanzeigen.de listings with structured
+    data extraction. Supports single and multi-URL scraping with automatic deduplication.
+  version: 1.0.0
+  contact:
+    name: API Support
+    url: https://github.com
+  license:
+    name: MIT
+servers:
+- url: http://localhost:3000
+  description: Local development server
+tags:
+- name: Health
+  description: Health check endpoints (public, no authentication required)
+- name: Scraper
+  description: Web scraping endpoints (require API key authentication)
+paths:
+  /health:
+    get:
+      tags:
+      - Health
+      summary: Check API health status
+      description: Returns the current health status of the API including uptime and
+        version. No authentication required.
+      operationId: getHealth
+      responses:
+        '200':
+          description: API is healthy and operational
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: ok
+                timestamp: '2026-01-04T15:00:00Z'
+                uptime: 3600
+                version: 1.0.0
+  /api/scrape:
+    get:
+      tags:
+      - Scraper
+      summary: Scrape listings from one or more kleinanzeigen.de search pages
+      description: 'Extracts all listings from kleinanzeigen.de search URL(s). Returns
+        15 fields per listing including id, title, price, location, images, and more.
+
+
+        **Single URL:**
+
+        `/api/scrape?url=/s-autos/c216`
+
+
+        **Multiple URLs (comma-separated):**
+
+        `/api/scrape?url=/s-autos/c216+global.farbe:blau,/s-autos/c216+global.farbe:gelb`
+
+
+        Useful for searching multiple colors, sizes, etc. that can''t be combined
+        in one URL. Results are automatically deduplicated.
+
+
+        **Anti-Detection Features:**
+
+        - User-Agent rotation (7 different browsers)
+
+        - Random delays (2-5 seconds configurable)
+
+        - Rate limit detection
+
+        - Automatic retry with exponential backoff
+
+
+        **Optional ''since'' parameter:**
+
+        When provided, returns only listings newer than the specified ID (useful for
+        polling for new listings). Works across all URLs in multi-URL mode.'
+      operationId: scrapeListings
+      security:
+      - ApiKeyAuth: []
+      parameters:
+      - name: url
+        in: query
+        required: true
+        description: Single URL path or comma-separated list of URL paths to scrape
+        schema:
+          type: string
+        example: /s-autos/c216+global.farbe:blau,/s-autos/c216+global.farbe:gelb
+      - name: since
+        in: query
+        required: false
+        description: Listing ID to filter - only return listings with ID greater than
+          this value
+        schema:
+          type: string
+        example: '3287237963'
+      responses:
+        '200':
+          description: Successfully scraped listings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScrapeResponse'
+        '400':
+          description: Missing required URL parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error: URL parameter or urls array required
+        '401':
+          description: Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error: Invalid or missing API key. Include X-API-Key header.
+        '500':
+          description: Scraping error (network error, rate limit, invalid URL, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error: 'Failed to fetch URL: URL not found - invalid search criteria
+                  or listing removed'
+  /api/newest:
+    get:
+      tags:
+      - Scraper
+      summary: Get the newest listing from one or more search pages
+      description: 'Scrapes search page(s) and returns only the newest (most recent)
+        listing. Useful for quickly checking if new items have been posted.
+
+
+        **Single URL:**
+
+        `/api/scrape?url=/s-autos/c216`
+
+
+        **Multiple URLs (comma-separated):**
+
+        `/s-autos/c216+global.farbe:blau,/s-autos/c216+global.farbe:gelb`
+
+
+        Returns the listing with the highest ID (most recent) from all URLs combined.
+        Featured/promoted listings are automatically skipped to return the newest
+        organic listing.
+
+
+        **Use case:**
+
+        Poll this endpoint periodically to detect new listings, then use the returned
+        ID with the `/api/scrape?since=ID` endpoint to get all new listings.'
+      operationId: getNewestListing
+      security:
+      - ApiKeyAuth: []
+      parameters:
+      - name: url
+        in: query
+        required: true
+        description: Single URL path or comma-separated list of URL paths
+        schema:
+          type: string
+        example: /s-autos/c216+global.farbe:blau,/s-autos/c216+global.farbe:gelb
+      responses:
+        '200':
+          description: Successfully retrieved newest listing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewestResponse'
+        '400':
+          description: Missing required URL parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Scraping error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication. Use 'test-key-123' for testing.
+  schemas:
+    Listing:
+      type: object
+      required:
+      - id
+      - url
+      - seller_type
+      properties:
+        id:
+          type: string
+          description: Unique listing ID from kleinanzeigen.de
+          example: '3287237963'
+        title:
+          type: string
+          nullable: true
+          description: Listing title
+          example: NEU! Designer Couchtisch Glastisch
+        url:
+          type: string
+          format: uri
+          description: Full URL to the listing detail page
+          example: https://www.kleinanzeigen.de/s-anzeige/neu-designer-couchtisch/3287237963
+        price:
+          type: string
+          nullable: true
+          description: Price as displayed (null if not specified, e.g. 'zu verschenken')
+          example: 160 €
+        location:
+          type: string
+          nullable: true
+          description: Postal code and district name
+          example: 80797 Schwabing-West
+        image:
+          type: string
+          format: uri
+          nullable: true
+          description: URL of the first/main image
+          example: https://img.kleinanzeigen.de/api/v1/prod-ads/images/12/12345678-1234-1234-1234-123456789012?rule=$_59.JPG
+        image_count:
+          type: integer
+          nullable: true
+          description: Total number of images available for this listing
+          example: 3
+          minimum: 0
+        description:
+          type: string
+          nullable: true
+          description: Short description/preview text from the listing
+          example: Nur 1x aufgebaut, wie neu! Abholung in München.
+        posted_date:
+          type: string
+          nullable: true
+          description: 'When the listing was posted (German format: ''Heute'', ''Gestern'',
+            or date)'
+          example: Heute, 14:51
+        shipping:
+          type: string
+          nullable: true
+          enum:
+          - Versand möglich
+          - Nur Abholung
+          - null
+          description: Shipping availability status
+          example: Versand möglich
+        seller_type:
+          type: string
+          enum:
+          - PRIVATE
+          - PRO
+          description: Type of seller - PRIVATE (individual) or PRO (commercial/dealer)
+          example: PRIVATE
+        seller_name:
+          type: string
+          nullable: true
+          description: Seller name (usually null on search results page, only visible
+            on detail page)
+          example: null
+        buy_now:
+          type: boolean
+          description: Whether 'Direkt kaufen' (buy now) option is available
+          example: false
+        is_featured:
+          type: boolean
+          description: Whether this is a promoted/featured/highlighted listing (paid
+            advertisement)
+          example: false
+        additional_info:
+          type: array
+          items:
+            type: string
+          description: 'Category-specific attributes (e.g., for cars: transmission,
+            fuel type, mileage, year)'
+          example:
+          - Automatik
+          - Benzin
+          - 98.000 km
+          - '2018'
+    HealthResponse:
+      type: object
+      required:
+      - status
+      - timestamp
+      - uptime
+      - version
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          description: Health status of the service
+          example: ok
+        timestamp:
+          type: string
+          format: date-time
+          description: Current server time in ISO 8601 format (UTC)
+          example: '2026-01-04T15:00:00Z'
+        uptime:
+          type: integer
+          description: Server uptime in seconds since last restart
+          example: 3600
+          minimum: 0
+        version:
+          type: string
+          description: API version
+          example: 1.0.0
+          pattern: ^\d+\.\d+\.\d+$
+    ScrapeResponse:
+      type: object
+      required:
+      - success
+      - urls
+      - urlCount
+      - scrapedAt
+      - count
+      - listings
+      properties:
+        success:
+          type: boolean
+          description: Whether the scraping operation was successful
+          example: true
+        urls:
+          oneOf:
+          - type: string
+            description: Single URL path
+          - type: array
+            items:
+              type: string
+            description: Multiple URL paths
+          description: Single URL path (string) or multiple URL paths (array)
+          example:
+          - /s-autos/c216?carcolor=1
+          - /s-autos/c216?carcolor=2
+        urlCount:
+          type: integer
+          description: Number of URLs that were scraped
+          example: 2
+          minimum: 1
+        scrapedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the scraping was performed (UTC)
+          example: '2026-01-04T15:30:00Z'
+        count:
+          type: integer
+          description: Number of listings returned (after deduplication and filtering)
+          example: 27
+          minimum: 0
+        since:
+          type: string
+          description: Only present when 'since' parameter was used - the ID that
+            was filtered by
+          example: '3287237963'
+        newListingsCount:
+          type: integer
+          description: Only present when 'since' parameter was used - same as 'count'
+            field
+          example: 5
+          minimum: 0
+        listings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Listing'
+          description: Array of listing objects with full details
+    NewestResponse:
+      type: object
+      required:
+      - success
+      - urls
+      - urlCount
+      - scrapedAt
+      - newest
+      properties:
+        success:
+          type: boolean
+          description: Whether the operation was successful
+          example: true
+        urls:
+          oneOf:
+          - type: string
+            description: Single URL path
+          - type: array
+            items:
+              type: string
+            description: Multiple URL paths
+          description: Single URL path (string) or multiple URL paths (array)
+          example:
+          - /s-autos/c216+global.farbe:blau
+          - /s-autos/c216+global.farbe:gelb
+        urlCount:
+          type: integer
+          description: Number of URLs that were scraped
+          example: 2
+          minimum: 1
+        scrapedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the scraping was performed (UTC)
+          example: '2026-01-04T15:30:00Z'
+        newest:
+          oneOf:
+          - $ref: '#/components/schemas/Listing'
+          - type: 'null'
+          description: The newest (highest ID) non-featured listing, or null if no
+            listings found
+          example:
+            id: '3287237963'
+            title: Designer Couchtisch
+            price: 160 €
+            location: 80797 Schwabing-West
+            posted_date: Heute, 14:51
+            url: https://www.kleinanzeigen.de/s-anzeige/designer-couchtisch/3287237963
+            image: https://img.kleinanzeigen.de/...
+            seller_type: PRIVATE
+            is_featured: false
+            buy_now: false
+            seller_name: null
+            image_count: 3
+            description: Moderner Designer Couchtisch
+            shipping: Versand möglich
+            additional_info: []
+    ErrorResponse:
+      type: object
+      required:
+      - success
+      - error
+      properties:
+        success:
+          type: boolean
+          description: Always false for error responses
+          example: false
+        error:
+          type: string
+          description: Error message describing what went wrong
+          example: Invalid or missing API key. Include X-API-Key header.

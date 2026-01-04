@@ -1,0 +1,87 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get previous tag
+          PREVIOUS_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+          
+          # Generate changelog
+          if [ -z "$PREVIOUS_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            CHANGELOG=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+          
+          # Save to file
+          echo "$CHANGELOG" > CHANGELOG.txt
+          
+          # Set output
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ steps.version.outputs.version }}
+          body: |
+            ## 🚀 Release ${{ steps.version.outputs.version }}
+            
+            ### 📦 Docker Images
+            
+            **Scraper API:**
+            ```bash
+            docker pull brottus/ebay-kleinanzeigen-scraper:${{ steps.version.outputs.version }}
+            docker pull brottus/ebay-kleinanzeigen-scraper:latest
+            ```
+            
+            **Job Scheduler:**
+            ```bash
+            docker pull brottus/ebay-kleinanzeigen-job-scheduler:${{ steps.version.outputs.version }}
+            docker pull brottus/ebay-kleinanzeigen-job-scheduler:latest
+            ```
+            
+            **Docker Hub:**
+            - [Scraper API](https://hub.docker.com/r/brottus/ebay-kleinanzeigen-scraper)
+            - [Job Scheduler](https://hub.docker.com/r/brottus/ebay-kleinanzeigen-job-scheduler)
+            
+            ### 📝 Changes
+            
+            ${{ steps.changelog.outputs.changelog }}
+            
+            ### 📚 Documentation
+            
+            - [Main README](https://github.com/${{ github.repository }}/blob/main/README.md)
+            - [Scraper API Docs](https://github.com/${{ github.repository }}/blob/main/ebay-kleinanzeigen-scraper/README.md)
+            - [Job Scheduler Docs](https://github.com/${{ github.repository }}/blob/main/ebay-kleinanzeigen-job-scheduler/README.md)
+          draft: false
+          prerelease: false
