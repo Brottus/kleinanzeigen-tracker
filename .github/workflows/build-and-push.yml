@@ -64,6 +64,16 @@ jobs:
             VERSION=${{ steps.meta.outputs.version }}
             BUILD_DATE=${{ steps.meta.outputs.created }}
             VCS_REF=${{ github.sha }}
+      
+      - name: Update Docker Hub description
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.DOCKERHUB_USERNAME }}/ebay-kleinanzeigen-scraper
+          readme-filepath: ./ebay-kleinanzeigen-scraper/README.md
+          short-description: "Scraper API for kleinanzeigen.de - Extract listing data with anti-detection"
 
   build-scheduler:
     name: Build Job Scheduler
@@ -112,3 +122,13 @@ jobs:
             VERSION=${{ steps.meta.outputs.version }}
             BUILD_DATE=${{ steps.meta.outputs.created }}
             VCS_REF=${{ github.sha }}
+      
+      - name: Update Docker Hub description
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.DOCKERHUB_USERNAME }}/ebay-kleinanzeigen-job-scheduler
+          readme-filepath: ./ebay-kleinanzeigen-job-scheduler/README.md
+          short-description: "Job Scheduler for kleinanzeigen.de monitoring - Automated job execution with notifications"
