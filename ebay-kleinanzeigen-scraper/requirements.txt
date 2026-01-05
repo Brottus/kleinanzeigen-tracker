@@ -1,0 +1,20 @@
+# Service 1: Scraper API - Python Dependencies
+
+# Web Framework
+Flask>=3.0
+Flask-CORS>=4.0
+Werkzeug>=3.0
+
+# Web Scraping
+beautifulsoup4>=4.12
+lxml>=5.0
+requests>=2.31
+
+# API Documentation
+flask-swagger-ui>=5.0
+
+# WSGI Server for Production
+gunicorn>=21.2
+
+# Additional for retry logic
+urllib3>=2.0

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>kleinanzeigen tracker</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Login Page -->
+    <div id="loginPage" class="login-container">
+        <div class="login-card">
+            <h1 data-i18n="welcomeBack">🔐 Welcome Back</h1>
+            <p data-i18n="signInDesc">Sign in to manage your kleinanzeigen jobs</p>
+            
+            <div id="loginError" style="display: none;" class="alert alert-error"></div>
+            
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username" data-i18n="username">Username</label>
+                    <input type="text" id="username" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password" data-i18n="password">Password</label>
+                    <input type="password" id="password" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                    <span id="loginBtnText" data-i18n="signIn">Sign In</span>
+                    <div id="loginSpinner" class="spinner" style="display: none;"></div>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="appContainer" class="app-container">
+        <header class="app-header">
+            <h1 data-i18n="appTitle">kleinanzeigen tracker</h1>
+            <div class="user-menu">
+                <button class="btn btn-secondary btn-sm" onclick="toggleTheme()" id="themeToggle" title="Toggle dark mode">
+                    <span id="themeIcon">🌙</span>
+                </button>
+                <span class="user-info" onclick="showChangePasswordModal()" style="cursor: pointer;" title="Click to change password">
+                    👤 <span id="currentUser"></span>
+                </span>
+                <button class="btn btn-secondary btn-sm" onclick="logout()" data-i18n="logout">Logout</button>
+            </div>
+        </header>
+
+        <main class="app-main">
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('jobs')" data-i18n="jobs">Jobs</button>
+                <button class="tab" onclick="switchTab('config')" data-i18n="configuration">Configuration</button>
+                <button class="tab" onclick="switchTab('health')" data-i18n="health">Health</button>
+            </div>
+
+            <!-- Jobs Tab -->
+            <div id="jobsTab" class="tab-content active">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label" data-i18n="totalJobs">Total Jobs</div>
+                        <div class="stat-value" id="totalJobs">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label" data-i18n="activeJobs">Active Jobs</div>
+                        <div class="stat-value" id="activeJobs">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label" data-i18n="successRate">Success Rate</div>
+                        <div class="stat-value" id="successRate">-</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title" data-i18n="scheduledJobs">Scheduled Jobs</h2>
+                        <button class="btn btn-primary" onclick="showCreateJobModal()" data-i18n="createJob">+ Create Job</button>
+                    </div>
+
+                    <div id="jobsLoading" class="loading">
+                        <div class="spinner"></div>
+                    </div>
+
+                    <div id="jobsTable" style="display: none;">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th data-i18n="name">Name</th>
+                                        <th data-i18n="url">URL</th>
+                                        <th data-i18n="schedule">Schedule</th>
+                                        <th data-i18n="status">Status</th>
+                                        <th data-i18n="lastRun">Last Run</th>
+                                        <th data-i18n="actions">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="jobsTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div id="jobsEmpty" style="display: none;" class="empty-state">
+                        <div class="empty-state-icon">📭</div>
+                        <h3 data-i18n="noJobsYet">No jobs yet</h3>
+                        <p data-i18n="noJobsDesc">Create your first job to start monitoring kleinanzeigen.de</p>
+                        <button class="btn btn-primary" onclick="showCreateJobModal()" style="margin-top: 16px;" data-i18n="createJob">Create Job</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Config Tab -->
+            <div id="configTab" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title" data-i18n="systemConfig">System Configuration</h2>
+                        <button class="btn btn-primary" onclick="saveConfig()" data-i18n="saveChanges">Save Changes</button>
+                    </div>
+
+                    <div id="configForm"></div>
+                </div>
+            </div>
+
+            <!-- Health Tab -->
+            <div id="healthTab" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title" data-i18n="serviceHealth">Service Health</h2>
+                        <button class="btn btn-secondary" onclick="loadHealth()" data-i18n="refresh">🔄 Refresh</button>
+                    </div>
+
+                    <div id="healthContent"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Create/Edit Job Modal -->
+    <div id="jobModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="jobModalTitle" data-i18n="createNewJob">Create New Job</h2>
+                <button class="close-modal" onclick="closeJobModal()">×</button>
+            </div>
+
+            <form id="jobForm">
+                <div class="form-group">
+                    <label for="jobName" data-i18n="jobName">Job Name *</label>
+                    <input type="text" id="jobName" placeholder="e.g., Monitor Munich Tables" required>
+                </div>
+
+                <div class="form-group">
+                    <label data-i18n="searchUrlPaths">Search URL Paths *</label>
+                    <div id="urlFieldsContainer">
+                        <!-- URL fields will be added here dynamically -->
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="addUrlField()" style="margin-top: 8px;" id="addUrlButton">
+                        + Add Another URL
+                    </button>
+                    <small id="urlPathsHelpText" style="color: var(--text-secondary); display: block; margin-top: 8px;">
+                        Add multiple URLs to monitor several searches in one job. Results will be combined and deduplicated.
+                    </small>
+                    <small id="urlPathExample" style="color: var(--text-secondary); display: block; margin-top: 4px; font-size: 12px;">
+                        Example: From https://www.kleinanzeigen.de/s-wohnzimmer/muenchen/tisch/k0c88l6411 use only <code>/s-wohnzimmer/muenchen/tisch/k0c88l6411</code>
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label for="schedulePreset" data-i18n="scheduleLabel">Schedule *</label>
+                    <select id="schedulePreset" onchange="updateScheduleFromPreset()">
+                        <option value="" data-i18n="selectPreset">-- Select a preset or use custom --</option>
+                        <optgroup label="Common Intervals" data-i18n="commonIntervals">
+                            <option value="*/5 * * * *" data-i18n="every5min">Every 5 minutes</option>
+                            <option value="*/10 * * * *" data-i18n="every10min">Every 10 minutes</option>
+                            <option value="*/15 * * * *" data-i18n="every15min">Every 15 minutes</option>
+                            <option value="*/30 * * * *" selected data-i18n="every30min">Every 30 minutes</option>
+                            <option value="0 * * * *" data-i18n="everyHour">Every hour</option>
+                            <option value="0 */2 * * *" data-i18n="every2hours">Every 2 hours</option>
+                            <option value="0 */6 * * *" data-i18n="every6hours">Every 6 hours</option>
+                            <option value="0 */12 * * *" data-i18n="every12hours">Every 12 hours</option>
+                        </optgroup>
+                        <optgroup label="Daily" data-i18n="daily">
+                            <option value="0 8 * * *" data-i18n="dailyAt8am">Daily at 8:00 AM</option>
+                            <option value="0 12 * * *" data-i18n="dailyAt12pm">Daily at 12:00 PM</option>
+                            <option value="0 18 * * *" data-i18n="dailyAt6pm">Daily at 6:00 PM</option>
+                            <option value="0 20 * * *" data-i18n="dailyAt8pm">Daily at 8:00 PM</option>
+                            <option value="0 0 * * *" data-i18n="dailyAtMidnight">Daily at midnight</option>
+                        </optgroup>
+                        <optgroup label="Weekdays" data-i18n="weekdays">
+                            <option value="0 9 * * 1-5" data-i18n="weekdaysAt9am">Weekdays at 9:00 AM</option>
+                            <option value="0 18 * * 1-5" data-i18n="weekdaysAt6pm">Weekdays at 6:00 PM</option>
+                        </optgroup>
+                        <optgroup label="Weekend" data-i18n="weekend">
+                            <option value="0 10 * * 0,6" data-i18n="weekendAt10am">Weekend at 10:00 AM</option>
+                        </optgroup>
+                        <option value="custom" data-i18n="customCron">Custom cron expression...</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="customScheduleGroup" style="display: none;">
+                    <label for="jobSchedule">Custom Cron Expression *</label>
+                    <input type="text" id="jobSchedule" placeholder="*/30 * * * *" value="*/30 * * * *">
+                    <small style="color: var(--text-secondary); display: block; margin-top: 4px;">
+                        Format: minute hour day month weekday<br>
+                        Example: */30 * * * * = every 30 minutes<br>
+                        <a href="https://crontab.guru/" target="_blank" style="color: var(--primary);">Use crontab.guru for help</a>
+                    </small>
+                </div>
+
+                <div id="scheduleDescription" style="padding: 10px; background: var(--bg); border-radius: 6px; margin-bottom: 16px; font-size: 13px; color: var(--text-secondary);">
+                    <strong>Schedule:</strong> <span id="scheduleText">Will run every 30 minutes</span>
+                </div>
+
+                <div id="jobsEnabledNote" style="padding: 12px; background: var(--bg); border-radius: 6px; margin-top: 16px; font-size: 13px; color: var(--text-secondary);">
+                    Jobs are created as enabled by default. Use the "✓ Enabled / ✗ Disabled" button in the jobs table to enable/disable jobs (including notifications).
+                </div>
+
+                <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeJobModal()" data-i18n="cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <span id="jobFormBtnText">Create Job</span>
+                        <div id="jobFormSpinner" class="spinner" style="display: none;"></div>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="changePasswordModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 class="modal-title" id="changePasswordTitle">🔐 Change Password</h2>
+                <button class="close-modal" onclick="closeChangePasswordModal()">×</button>
+            </div>
+
+            <div id="passwordSuccess" style="display: none;" class="alert alert-success"></div>
+
+            <form id="changePasswordForm">
+                <div class="form-group">
+                    <label for="currentPassword" id="currentPasswordLabel">Current Password *</label>
+                    <div style="position: relative;">
+                        <input type="password" id="currentPassword" required autocomplete="current-password" style="padding-right: 40px;">
+                        <button type="button" onclick="togglePasswordVisibility('currentPassword')" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 18px; color: var(--text-secondary);" title="Show/hide password">
+                            🙈
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="newPassword" id="newPasswordLabel">New Password *</label>
+                    <div style="position: relative;">
+                        <input type="password" id="newPassword" required autocomplete="new-password" minlength="6" style="padding-right: 40px;">
+                        <button type="button" onclick="togglePasswordVisibility('newPassword')" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 18px; color: var(--text-secondary);" title="Show/hide password">
+                            🙈
+                        </button>
+                    </div>
+                    <small id="passwordRequirements" style="color: var(--text-secondary);">
+                        <strong>Requirements:</strong><br>
+                        • Minimum 6 characters<br>
+                        • Must contain at least one number or special character<br>
+                        • Must be different from current password
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label for="confirmPassword" id="confirmPasswordLabel">Confirm New Password *</label>
+                    <div style="position: relative;">
+                        <input type="password" id="confirmPassword" required autocomplete="new-password" minlength="6" style="padding-right: 40px;">
+                        <button type="button" onclick="togglePasswordVisibility('confirmPassword')" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 18px; color: var(--text-secondary);" title="Show/hide password">
+                            🙈
+                        </button>
+                    </div>
+                </div>
+
+                <div id="passwordError" style="display: none;" class="alert alert-error"></div>
+
+                <div id="passwordChangeNote" style="padding: 12px; background: var(--bg); border-radius: 6px; margin-top: 16px; font-size: 13px; color: var(--text-secondary);">
+                    <strong>⚠️ Note:</strong> After changing your password, you will be logged out and need to sign in again with your new password.
+                </div>
+
+                <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeChangePasswordModal()" id="passwordCancelBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <span id="changePasswordBtnText">Change Password</span>
+                        <div id="changePasswordSpinner" class="spinner" style="display: none;"></div>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Load JavaScript -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

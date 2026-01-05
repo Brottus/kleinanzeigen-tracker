@@ -1,0 +1,998 @@
+openapi: 3.0.0
+info:
+  title: Kleinanzeigen Job Scheduler API
+  description: Job scheduling and management API for automated kleinanzeigen.de monitoring
+  version: 1.0.0
+  contact:
+    name: API Support
+servers:
+- url: http://localhost:3001
+  description: Local development server
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token from /api/auth/login. Just paste the token - 'Bearer'
+        prefix is added automatically.
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        username:
+          type: string
+          example: admin
+        email:
+          type: string
+          format: email
+          example: admin@localhost
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        last_login:
+          type: string
+          format: date-time
+    Job:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Monitor Munich Tables
+        url:
+          type: string
+          example: /s-wohnzimmer/muenchen/tisch/k0c88l6411
+        schedule:
+          type: string
+          example: '*/30 * * * *'
+          description: Cron expression
+        enabled:
+          type: boolean
+          example: true
+        notify_enabled:
+          type: boolean
+          example: false
+        last_run:
+          type: string
+          format: date-time
+          nullable: true
+        last_status:
+          type: string
+          enum:
+          - success
+          - failed
+          nullable: true
+        last_listing_id:
+          type: string
+          nullable: true
+          example: '3287710985'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - name
+      - url
+      - schedule
+    JobInput:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Monitor Munich Tables
+          description: Unique job name
+        url:
+          type: string
+          example: /s-wohnzimmer/muenchen/tisch/k0c88l6411
+          description: Kleinanzeigen search URL path
+        schedule:
+          type: string
+          example: '*/30 * * * *'
+          description: Cron expression
+        enabled:
+          type: boolean
+          default: true
+          description: Whether the job is enabled
+        notify_enabled:
+          type: boolean
+          default: false
+          description: Enable Matterbridge notifications
+      required:
+      - name
+      - url
+      - schedule
+    ConfigValue:
+      type: object
+      properties:
+        value:
+          type: string
+          example: http://localhost:3000
+        description:
+          type: string
+          example: Scraper API base URL
+        is_sensitive:
+          type: boolean
+          example: false
+    ServiceHealth:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Scraper API
+        status:
+          type: string
+          enum:
+          - ok
+          - error
+          - not_configured
+          example: ok
+        url:
+          type: string
+          example: http://localhost:3000
+        data:
+          type: object
+          additionalProperties: true
+        error:
+          type: string
+          description: Error message if status is error
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+      required:
+      - success
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: Error message
+      required:
+      - success
+      - error
+    TokenResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        access_token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        refresh_token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+          example: 3600
+        user:
+          $ref: '#/components/schemas/User'
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        version:
+          type: string
+          example: 1.0.0
+        uptime:
+          type: integer
+          example: 3600
+          description: Uptime in seconds
+        scheduler_running:
+          type: boolean
+          example: true
+tags:
+- name: Authentication
+  description: Token-based authentication endpoints
+- name: Jobs
+  description: Job management endpoints
+- name: Configuration
+  description: System configuration endpoints
+- name: Health
+  description: Health check endpoints
+paths:
+  /api/auth/login:
+    post:
+      tags:
+      - Authentication
+      summary: Authenticate and get JWT tokens
+      description: 'Login with username and password to receive access and refresh
+        tokens.
+
+
+        **Token Lifespan:**
+
+        - Access token: 1 hour
+
+        - Refresh token: 7 days (sliding window)
+
+
+        **Default Credentials:**
+
+        - Username: admin
+
+        - Password: admin
+
+        '
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - username
+              - password
+              properties:
+                username:
+                  type: string
+                  example: admin
+                password:
+                  type: string
+                  example: admin
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  access_token:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  refresh_token:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  token_type:
+                    type: string
+                    example: Bearer
+                  expires_in:
+                    type: integer
+                    example: 3600
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      username:
+                        type: string
+                      email:
+                        type: string
+        '400':
+          description: Missing username or password
+        '401':
+          description: Invalid credentials
+  /api/auth/refresh:
+    post:
+      tags:
+      - Authentication
+      summary: Refresh access token using refresh token
+      description: 'Use a valid refresh token to get a new access token and refresh
+        token.
+
+        Implements sliding window - both tokens are renewed on each refresh.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - refresh_token
+              properties:
+                refresh_token:
+                  type: string
+                  description: Valid refresh token from login
+                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        '200':
+          description: Tokens refreshed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  access_token:
+                    type: string
+                  refresh_token:
+                    type: string
+                  token_type:
+                    type: string
+                    example: Bearer
+                  expires_in:
+                    type: integer
+                    example: 3600
+                  refresh_expires_in:
+                    type: integer
+                    example: 604800
+        '400':
+          description: Missing refresh token
+        '401':
+          description: Invalid or expired refresh token
+  /api/auth/me:
+    get:
+      tags:
+      - Authentication
+      summary: Get current authenticated user information
+      description: Returns information about the currently authenticated user based on JWT token
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: User information retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Missing or invalid token
+        '404':
+          description: User not found
+  /api/auth/change-password:
+    post:
+      tags:
+      - Authentication
+      summary: Change user password
+      description: |
+        Changes the password for the currently authenticated user.
+        Requires the current password for verification.
+        **After successful password change, all tokens are invalidated and the user must log in again.**
+      security:
+      - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - current_password
+              - new_password
+              properties:
+                current_password:
+                  type: string
+                  description: Current password for verification
+                  example: oldpassword123
+                new_password:
+                  type: string
+                  description: New password (minimum 6 characters recommended)
+                  example: newpassword456
+                  minLength: 6
+      responses:
+        '200':
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Password changed successfully. Please log in again.
+        '400':
+          description: Invalid request (missing fields or password too short)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_fields:
+                  value:
+                    success: false
+                    error: Current password and new password are required
+                password_too_short:
+                  value:
+                    success: false
+                    error: New password must be at least 6 characters long
+        '401':
+          description: Invalid current password or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                wrong_password:
+                  value:
+                    success: false
+                    error: Current password is incorrect
+                no_token:
+                  value:
+                    success: false
+                    error: Missing authentication token
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/jobs:
+    get:
+      tags:
+      - Jobs
+      summary: List all scheduled jobs
+      description: Returns a list of all configured jobs with their current status
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: Jobs retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  jobs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 1
+                        name:
+                          type: string
+                          example: Monitor Munich Tables
+                        url:
+                          type: string
+                          example: /s-wohnzimmer/muenchen/tisch/k0c88l6411
+                        schedule:
+                          type: string
+                          example: '*/30 * * * *'
+                        enabled:
+                          type: boolean
+                          example: true
+                        notify_enabled:
+                          type: boolean
+                          example: false
+                        last_run:
+                          type: string
+                          format: date-time
+                          example: '2026-01-02T22:04:39'
+                        last_status:
+                          type: string
+                          enum:
+                          - success
+                          - failed
+                          example: success
+                        last_listing_id:
+                          type: string
+                          example: '3287710985'
+                        created_at:
+                          type: string
+                          format: date-time
+                        updated_at:
+                          type: string
+                          format: date-time
+    post:
+      tags:
+      - Jobs
+      summary: Create a new scheduled job
+      description: 'Creates a new job to monitor kleinanzeigen.de listings.
+
+        The job will run on the specified cron schedule and can optionally send notifications
+        via Matterbridge.'
+      security:
+      - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - name
+              - url
+              - schedule
+              properties:
+                name:
+                  type: string
+                  example: Monitor Munich Tables
+                  description: Unique job name
+                url:
+                  type: string
+                  example: /s-wohnzimmer/muenchen/tisch/k0c88l6411
+                  description: Kleinanzeigen search URL path
+                schedule:
+                  type: string
+                  example: '*/30 * * * *'
+                  description: Cron expression (e.g. */30 * * * * for every 30 minutes)
+                enabled:
+                  type: boolean
+                  default: true
+                  description: Whether the job is enabled
+                notify_enabled:
+                  type: boolean
+                  default: false
+                  description: Enable Matterbridge notifications for this job (uses
+                    global gateway configuration)
+      responses:
+        '200':
+          description: Job created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  id:
+                    type: integer
+                    example: 1
+        '400':
+          description: Missing required field or duplicate job name
+  /api/jobs/{job_id}:
+    get:
+      tags:
+      - Jobs
+      summary: Get a single job by ID
+      description: Returns detailed information about a specific job
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Job ID
+      responses:
+        '200':
+          description: Job details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  job:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                      url:
+                        type: string
+                      schedule:
+                        type: string
+                      enabled:
+                        type: boolean
+                      notify_enabled:
+                        type: boolean
+                      last_run:
+                        type: string
+                        format: date-time
+                      last_status:
+                        type: string
+                      last_listing_id:
+                        type: string
+                      created_at:
+                        type: string
+                        format: date-time
+                      updated_at:
+                        type: string
+                        format: date-time
+        '404':
+          description: Job not found
+    put:
+      tags:
+      - Jobs
+      summary: Update an existing job
+      description: 'Update job configuration including notification settings.
+
+        All fields are optional - only provided fields will be updated.'
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Job ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Monitor Munich Tables
+                  description: Job name
+                url:
+                  type: string
+                  example: /s-wohnzimmer/muenchen/tisch/k0c88l6411
+                  description: Kleinanzeigen search URL path
+                schedule:
+                  type: string
+                  example: '*/30 * * * *'
+                  description: Cron expression
+                enabled:
+                  type: boolean
+                  description: Whether the job is enabled
+                notify_enabled:
+                  type: boolean
+                  description: Enable Matterbridge notifications (uses global gateway
+                    configuration)
+            example:
+              name: Munich Tables - Updated
+              notify_enabled: true
+              notify_gateway: gateway_ebaykleinanzeigen
+      responses:
+        '200':
+          description: Job updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        '404':
+          description: Job not found
+    delete:
+      tags:
+      - Jobs
+      summary: Delete a job
+      description: Permanently deletes a job and removes it from the scheduler
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Job ID to delete
+      responses:
+        '200':
+          description: Job deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        '404':
+          description: Job not found
+  /api/jobs/{job_id}/run:
+    post:
+      tags:
+      - Jobs
+      summary: Manually trigger job execution
+      description: Triggers immediate execution of a job, bypassing its schedule
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Job ID to run
+      responses:
+        '200':
+          description: Job execution started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Job execution started
+        '404':
+          description: Job not found
+  /api/config:
+    get:
+      tags:
+      - Configuration
+      summary: Get all configuration values
+      description: Returns all configuration key-value pairs. Sensitive values are
+        masked with '***'.
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: Configuration retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  config:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        value:
+                          type: string
+                        description:
+                          type: string
+                        is_sensitive:
+                          type: boolean
+                    example:
+                      scraper_api_url:
+                        value: http://localhost:3000
+                        description: Ebay Kleinanzeigen Scraper API base URL
+                        is_sensitive: false
+                      scraper_api_key:
+                        value: '***'
+                        description: API key for authenticating with the Scraper API
+                        is_sensitive: true
+                      notification_language:
+                        value: de
+                        description: Language for notification field labels
+                        is_sensitive: false
+  /api/config/{key}:
+    put:
+      tags:
+      - Configuration
+      summary: Update system configuration
+      description: 'Update one or more configuration values.
+
+
+        **Available Configuration Keys:**
+
+        - `scraper_api_url`: Ebay Kleinanzeigen Scraper API base URL (default: http://localhost:3000)
+
+        - `scraper_api_key`: API key for authenticating with the Scraper API (encrypted)
+
+        - `scraper_request_timeout`: Request timeout in seconds when calling the Scraper API (default: 30)
+
+        - `notification_language`: Language for notification field labels (de or en,
+        default: de)
+
+        - `matterbridge_url`: Matterbridge API URL (default: http://192.168.10.10:4242)
+
+        - `matterbridge_token`: Bearer token for Matterbridge API (encrypted)
+
+        - `matterbridge_gateway`: Matterbridge gateway name (default: gateway_ebaykleinanzeigen)
+
+        - `matterbridge_username`: Username for Matterbridge messages (default: Kleinanzeigen
+        Bot)
+
+        - `default_job_schedule`: Default cron schedule for new jobs (default: */30
+        * * * *)
+
+
+        **Note:** Sensitive values (api keys, tokens) are automatically encrypted
+        in the database.'
+      security:
+      - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+              properties:
+                scraper_api_url:
+                  type: string
+                  example: http://localhost:3000
+                scraper_api_key:
+                  type: string
+                  example: my-api-key-123
+                scraper_request_timeout:
+                  type: string
+                  example: '60'
+                notification_language:
+                  type: string
+                  enum:
+                  - de
+                  - en
+                  example: de
+                  description: Language for notification field labels
+                matterbridge_url:
+                  type: string
+                  example: http://192.168.10.10:4242
+                matterbridge_token:
+                  type: string
+                  example: bearer-token-here
+                matterbridge_gateway:
+                  type: string
+                  example: gateway_ebaykleinanzeigen
+                matterbridge_username:
+                  type: string
+                  example: Kleinanzeigen Bot
+                default_job_schedule:
+                  type: string
+                  example: '*/30 * * * *'
+                  description: Default cron schedule for new jobs
+              example:
+                scraper_api_url: http://localhost:3000
+                notification_language: en
+                matterbridge_gateway: my-gateway
+      responses:
+        '200':
+          description: Configuration updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+  /health:
+    get:
+      tags:
+      - Health
+      summary: Basic health check
+      description: Returns basic service health information (public endpoint, no auth
+        required)
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  version:
+                    type: string
+                    example: 1.0.0
+                  uptime:
+                    type: integer
+                    example: 3600
+                    description: Uptime in seconds
+                  scheduler_running:
+                    type: boolean
+                    example: true
+  /health/services:
+    get:
+      tags:
+      - Health
+      summary: Check all connected services
+      description: Checks connectivity and health of Scraper API, Job Scheduler (Self), and Matterbridge
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: Service health status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  services:
+                    type: object
+                    properties:
+                      scraper_api:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                            example: Scraper API
+                          status:
+                            type: string
+                            enum:
+                            - ok
+                            - error
+                            example: ok
+                          url:
+                            type: string
+                            example: http://localhost:3000
+                          data:
+                            type: object
+                            description: Health data from Scraper API
+                          error:
+                            type: string
+                            description: Error message if status is error
+                      job_scheduler:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                            example: Job Scheduler (Self)
+                          status:
+                            type: string
+                            example: ok
+                          url:
+                            type: string
+                            example: http://localhost:3001
+                          data:
+                            type: object
+                            properties:
+                              version:
+                                type: string
+                              uptime_seconds:
+                                type: integer
+                              scheduler_running:
+                                type: boolean
+                              total_jobs:
+                                type: integer
+                              active_jobs:
+                                type: integer
+                              success_rate:
+                                type: string
+                                example: 85%
+                      matterbridge:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                            example: Matterbridge
+                          status:
+                            type: string
+                            enum:
+                            - ok
+                            - error
+                            - not_configured
+                          url:
+                            type: string
+                            example: http://192.168.10.10:4242
+                          data:
+                            type: object
+                            properties:
+                              gateway:
+                                type: string
+                              api_accessible:
+                                type: boolean
+                              response_code:
+                                type: integer
+                          error:
+                            type: string

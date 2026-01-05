@@ -1,0 +1,99 @@
+# Dependabot configuration for automatic dependency updates
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates
+
+version: 2
+updates:
+  # GitHub Actions dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # Python dependencies - Scraper API
+  - package-ecosystem: "pip"
+    directory: "/ebay-kleinanzeigen-scraper"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "python"
+      - "scraper"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    # Group all minor and patch updates together
+    groups:
+      python-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Python dependencies - Job Scheduler
+  - package-ecosystem: "pip"
+    directory: "/ebay-kleinanzeigen-job-scheduler"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "python"
+      - "scheduler"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    # Group all minor and patch updates together
+    groups:
+      python-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Docker base images - Scraper
+  - package-ecosystem: "docker"
+    directory: "/ebay-kleinanzeigen-scraper"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "docker"
+      - "scraper"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # Docker base images - Scheduler
+  - package-ecosystem: "docker"
+    directory: "/ebay-kleinanzeigen-job-scheduler"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "docker"
+      - "scheduler"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
