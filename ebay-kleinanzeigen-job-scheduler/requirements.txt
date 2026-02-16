@@ -15,7 +15,7 @@ requests>=2.31
 
 # Security
 PyJWT>=2.8
-cryptography>=41.0
+cryptography>=46.0.5
 
 # WSGI Server for Production
 gunicorn>=21.2
