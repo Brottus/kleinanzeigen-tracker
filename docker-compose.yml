@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  # Ebay Kleinanzeigen Scraper API
+  scraper:
+    build:
+      context: ./ebay-kleinanzeigen-scraper
+      dockerfile: Dockerfile
+    container_name: ebay-kleinanzeigen-scraper
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - API_KEYS=test-key-123,production-key-456
+      - LOG_LEVEL=INFO
+      - FLASK_DEBUG=false
+      - ENABLE_SWAGGER_UI=true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - kleinanzeigen-network
+
+  # Ebay Kleinanzeigen Job Scheduler
+  scheduler:
+    build:
+      context: ./ebay-kleinanzeigen-job-scheduler
+      dockerfile: Dockerfile
+    container_name: ebay-kleinanzeigen-job-scheduler
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - DB_PATH=/app/data/jobs.db
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin
+      - SESSION_SECRET=change-this-to-a-random-secret-key-in-production
+      - JWT_SECRET=change-this-jwt-secret-in-production
+      - JWT_ACCESS_TOKEN_EXPIRES=3600
+      - JWT_REFRESH_TOKEN_EXPIRES=604800
+      - LOG_LEVEL=INFO
+      - FLASK_DEBUG=false
+      - ENABLE_SWAGGER_UI=true
+      - ENABLE_WEB_UI=true
+      # Scraper API connection
+      - SCRAPER_API_URL=http://scraper:3000
+      - SCRAPER_API_KEY=test-key-123
+      - SCRAPER_REQUEST_TIMEOUT=30
+      # Notification language
+      - NOTIFICATION_LANGUAGE=en
+      # Apprise (default notification method — add URLs via http://localhost:8000)
+      - APPRISE_ENABLED=true
+      - APPRISE_API_URL=http://apprise:8000
+      - APPRISE_API_KEY=kleinanzeigen
+      # Matterbridge (optional — set MATTERBRIDGE_ENABLED=true to activate)
+      - MATTERBRIDGE_ENABLED=false
+      - MATTERBRIDGE_URL=http://matterbridge:4242
+      - MATTERBRIDGE_TOKEN=${MATTERBRIDGE_TOKEN:-}
+      - MATTERBRIDGE_GATEWAY=${MATTERBRIDGE_GATEWAY:-gateway_ebaykleinanzeigen}
+    volumes:
+      - scheduler-data:/app/data
+    restart: unless-stopped
+    depends_on:
+      - scraper
+      - apprise
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:3001/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - kleinanzeigen-network
+
+  # Apprise - Default notification backend (80+ services)
+  # Add notification URLs at http://localhost:8000 for key "kleinanzeigen"
+  # Documentation: https://github.com/caronc/apprise/wiki
+  apprise:
+    image: caronc/apprise:latest
+    container_name: apprise
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    networks:
+      - kleinanzeigen-network
+
+  # Matterbridge - Optional message bridge (Discord, Slack, Teams, IRC, Matrix, etc.)
+  # Set MATTERBRIDGE_ENABLED=true in scheduler to activate
+  # Documentation: https://github.com/42wim/matterbridge/wiki
+  matterbridge:
+    image: 42wim/matterbridge:stable
+    container_name: matterbridge
+    restart: unless-stopped
+    ports:
+      - "4242:4242"
+    volumes:
+      # Mount your matterbridge.toml config file
+      # Create config first: https://github.com/42wim/matterbridge/wiki/How-to-create-your-config
+      - ./matterbridge:/etc/matterbridge:ro
+    networks:
+      - kleinanzeigen-network
+
+networks:
+  kleinanzeigen-network:
+    driver: bridge
+
+volumes:
+  scheduler-data:
+    driver: local

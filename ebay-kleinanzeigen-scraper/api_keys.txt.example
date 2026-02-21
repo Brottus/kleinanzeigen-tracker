@@ -1,0 +1,14 @@
+# API Keys for Kleinanzeigen Scraper API
+# Format: one key per line
+# Lines starting with # are ignored
+
+# Generate secure keys with: openssl rand -hex 32
+
+# Production key
+your-production-key-here
+
+# Development key
+your-development-key-here
+
+# Service account key
+your-service-key-here
